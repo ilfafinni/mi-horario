@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mi Horario</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>" />
+</head>
+<body>
+  <header>
+    <h1>📅 Mi Horario</h1>
+    <p class="sub">Sube la foto del horario completo (tuyo + compañeros) y aíslo solo el tuyo.</p>
+  </header>
+
+  <main>
+    <!-- PASO 1: nombre -->
+    <section class="card" id="step-name">
+      <h2>1 · ¿Cómo te llamas?</h2>
+      <p class="hint">El horario se filtrará por este nombre para dejar solo tus clases.</p>
+      <div class="row">
+        <input type="text" id="my-name" placeholder="Ej: Ana García" />
+      </div>
+    </section>
+
+    <!-- PASO 2: subida -->
+    <section class="card" id="step-upload">
+      <h2>2 · Sube tu horario</h2>
+      <div class="drop" id="dropzone">
+        <input type="file" id="file-input" accept="image/*" hidden />
+        <p>📷 Arrastra aquí tu captura <br /><small>o haz clic para elegir un archivo</small></p>
+      </div>
+      <div id="preview-wrap" hidden>
+        <img id="preview" alt="Previsualización" />
+        <div class="row">
+          <button id="btn-ocr" class="primary">Reconocer horario (OCR)</button>
+        </div>
+      </div>
+      <div id="ocr-status" class="status" hidden></div>
+    </section>
+
+    <!-- PASO 3: texto detectado -->
+    <section class="card" id="step-text" hidden>
+      <h2>3 · Texto detectado</h2>
+      <p class="hint">El OCR no es perfecto: revisa que tu nombre y horas estén bien antes de confirmar.</p>
+      <textarea id="ocr-text" rows="8" spellcheck="false"></textarea>
+      <div class="row">
+        <button id="btn-parse" class="primary">Generar mi calendario</button>
+      </div>
+    </section>
+
+    <!-- PASO 4: calendario -->
+    <section class="card" id="step-calendar" hidden>
+      <div class="cal-header">
+        <h2>4 · Tu semana</h2>
+        <div class="row right">
+          <button id="btn-export" title="Guardar en un archivo">💾 Exportar</button>
+          <button id="btn-import" title="Cargar un archivo">📂 Importar</button>
+          <input type="file" id="import-input" accept=".json,application/json" hidden />
+          <button id="btn-print" title="Imprimir">🖨️ Imprimir</button>
+        </div>
+      </div>
+      <div id="week" class="week"></div>
+      <div class="cal-header">
+        <h3>Editar</h3>
+        <div class="row">
+          <input type="text" id="ev-title" placeholder="Nombre de la clase" />
+          <select id="ev-day"></select>
+          <input type="time" id="ev-start" value="08:00" />
+          <span>–</span>
+          <input type="time" id="ev-end" value="10:00" />
+          <button id="btn-add" class="primary">＋</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Los datos se guardan en tu navegador. Usa 💾 Exportar para guardar una copia como archivo.</p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

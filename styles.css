@@ -1,0 +1,155 @@
+:root {
+  --bg: #f4f6fb;
+  --card: #ffffff;
+  --ink: #22314f;
+  --muted: #6b7893;
+  --accent: #4f6df5;
+  --accent-dark: #3b56d8;
+  --line: #e3e8f2;
+  --ok: #2ea869;
+  --warn: #d97706;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+header {
+  background: linear-gradient(135deg, var(--accent), #7a5cf0);
+  color: #fff;
+  padding: 26px 20px;
+  text-align: center;
+}
+
+header h1 { margin: 0; font-size: 26px; }
+.sub { margin: 6px 0 0; opacity: .9; font-size: 14px; }
+
+main {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 18px 14px 60px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px;
+  margin: 16px 0;
+  box-shadow: 0 6px 18px rgba(35, 49, 96, .05);
+}
+
+.card h2 { margin: 0 0 8px; font-size: 17px; }
+.card h3 { margin: 0 0 10px; font-size: 15px; }
+.hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row.right { justify-content: flex-end; }
+
+input[type="text"], textarea, select, input[type="time"], input[type="date"] {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--ink);
+  background: #fff;
+}
+
+input[type="text"] { min-width: 220px; }
+textarea { width: 100%; resize: vertical; font-family: ui-monospace, monospace; }
+
+button {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: .15s;
+}
+
+button:hover { border-color: var(--accent); color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover { background: var(--accent-dark, var(--accent)); opacity: .92; color: #fff; }
+
+.drop {
+  border: 2px dashed #b9c4dd;
+  border-radius: 12px;
+  padding: 34px;
+  text-align: center;
+  color: var(--muted);
+  cursor: pointer;
+  transition: .15s;
+}
+.drop:hover, .drop.over { border-color: var(--accent); color: var(--accent); background: #f5f7ff; }
+.drop small { color: #93a0b8; }
+
+#preview-wrap img { max-width: 100%; max-height: 320px; border-radius: 8px; margin: 14px 0; }
+#preview-wrap { text-align: center; }
+
+.status { margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 14px; }
+.status.loading { background: #eef2ff; color: var(--accent); }
+.status.error { background: #fdeaea; color: #b42318; }
+.status.info { background: #fff7e6; color: var(--warn); }
+
+/* ---- Semana ---- */
+.week-wrap { overflow-x: auto; }
+.week {
+  display: grid;
+  grid-template-columns: 60px repeat(7, 1fr);
+  min-width: 720px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.day-head { text-align: center; font-weight: 600; font-size: 13px; padding: 8px 4px; border: 1px solid var(--line); background: #f0f3fb; }
+.day-head.today { background: var(--accent); color: #fff; }
+.corner { background: #f0f3fb; border: 1px solid var(--line); }
+
+.day-col { border: 1px solid var(--line); background: #fff; }
+.day-col.drop-hover { background: #eef2ff; }
+
+.event {
+  margin: 5px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #fff;
+  background: var(--accent);
+  overflow: hidden;
+  position: relative;
+  word-break: break-word;
+}
+.event.cls { cursor: pointer; }
+.event.cls:hover { filter: brightness(1.1); }
+.event .ev-x { position: absolute; top: 3px; right: 6px; font-weight: 700; opacity: .7; }
+.event .ev-x:hover { opacity: 1; }
+
+.palette-0 { background: #4f6df5; }
+.palette-1 { background: #12a3a8; }
+.palette-2 { background: #e0701b; }
+.palette-3 { background: #9b5de5; }
+.palette-4 { background: #d8516e; }
+.palette-5 { background: #3b8a3f; }
+.palette-6 { background: #cd6f0f; }
+
+.day-col .slot-note { font-size: 11px; color: var(--muted); padding: 3px 6px; }
+
+footer { text-align: center; color: var(--muted); font-size: 13px; padding: 18px; }
+/* ---- Impresión ---- */
+@media print {
+  header, footer, .card:not(#step-calendar), .ev-x, .row, #step-calendar .cal-header .row { display: none !important; }
+  body { background: #fff; }
+  .card { box-shadow: none; border: none; margin: 0; padding: 0; }
+  .week { min-width: 100%; }
+  .event { break-inside: avoid; }
+}
