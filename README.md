@@ -9,7 +9,7 @@ Página web que aísla **solo tu horario** a partir de una foto/captura que cont
 3. **Reconocer (OCR):** la imagen se lee en tu navegador con [Tesseract.js](https://tesseract.projectnaptha.com/). No se envía nada a ningún servidor.
 4. **Revisa el texto** detectado (el OCR no es 100% perfecto) y pulsa **Generar mi calendario**.
 5. La app detecta automáticamente **las líneas que contienen tu nombre**, extrae día y hora, y solo con eso arma tu calendario semanal.
-6. Añade, edita o elimina clases a mano; todo se guarda en tu navegador.
+6. Pulsa una clase para **editarla**, arrástrala a otro día para **moverla** o usa **×** para quitarla; todo se guarda en tu navegador (Esc cancela una edición).
 
 ## Guardar / respaldar
 
@@ -35,3 +35,7 @@ Una vez pones tu nombre, el filtro `state.name` se usa para detectar en el texto
 ## Personalizar
 
 Abre `app.js` y busca `DAYS`, `colorClass` o `parseSchedule` para ajustar los nombres de los días, los colores de las clases o la lógica de detección.
+
+## Tests
+
+`node tests/schedule.test.js` comprueba el parseo del texto OCR (celdas, nombre en línea vecina, horas pegadas, formato de horas) y la saneación de datos importados.

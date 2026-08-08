@@ -32,6 +32,32 @@
   };
 
   var state = { name: "", events: [] };
+  var editingId = null;
+
+  function uid() {
+    return "e" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  function sanitize(events) {
+    var out = [];
+    (events || []).forEach(function (ev) {
+      if (!ev || typeof ev.title !== "string") return;
+      var day = parseInt(ev.day, 10);
+      var start = parseInt(ev.start, 10);
+      var end = parseInt(ev.end, 10);
+      if (isNaN(day) || day < 0 || day > 6) return;
+      if (isNaN(start) || isNaN(end) || start < 0 || end > 24 * 60 || start >= end) return;
+      out.push({
+        id: ev.id !== undefined && ev.id !== null ? ev.id : uid(),
+        title: ev.title.trim() || "Clase",
+        day: day,
+        start: start,
+        end: end,
+        src: ev.src || ""
+      });
+    });
+    return out;
+  }
 
   /* ---------------- Persistencia ---------------- */
 
@@ -46,7 +72,7 @@
         var s = JSON.parse(raw);
         if (s && Array.isArray(s.events)) {
           state.name = s.name || "";
-          state.events = s.events;
+          state.events = sanitize(s.events);
           els.name.value = state.name;
         }
       }
@@ -190,7 +216,7 @@
       var key = day + "|" + start + "|" + title;
       if (seen[key]) return;
       seen[key] = true;
-      out.push({ title: title, day: day, start: start, end: end, src: src });
+      out.push({ id: uid(), title: title, day: day, start: start, end: end, src: src });
     }
 
     for (var i = 0; i < lines.length; i++) {
@@ -219,13 +245,20 @@
       // para no mezclar con clases de otros.
       var prev = i > 0 ? lines[i - 1].trim() : "";
       var next = i < n - 1 ? lines[i + 1].trim() : "";
-      var prevName = norm(prev).indexOf(normName) !== -1 && !timeRangeOf(prev) && prev.split(/\s+/).length <= 2;
-      var nextName = norm(next).indexOf(normName) !== -1 && !timeRangeOf(next) && next.split(/\s+/).length <= 2;
+
+      function nameOnlyLine(l) {
+        if (!l || l.split(/\s+/).length > 4) return false;
+        if (timeRangeOf(l) || dayTokenDay(l) >= 0) return false;
+        return norm(l).indexOf(normName) !== -1;
+      }
+
+      var prevName = nameOnlyLine(prev);
+      var nextName = nameOnlyLine(next);
 
       if (range && (prevName || nextName)) {
-        var srcLine = prevName ? prev + " / " + line : line + " / " + next;
-        var titleLine = prevName ? prev : next;
-        push(dayHere >= 0 ? dayHere : recentDay, range.start, range.end, cleanTitle(titleLine, name), srcLine);
+        var merged = (prevName ? prev : "") + " " + (nextName ? next : "") + " " + line;
+        var srcLine = (prevName ? prev + " / " : "") + line + (nextName ? " / " + next : "");
+        push(dayHere >= 0 ? dayHere : recentDay, range.start, range.end, cleanTitle(merged, name), srcLine);
       }
     }
     return out;
@@ -235,6 +268,7 @@
     var t = line;
     t = t.replace(/(domingo|lunes|martes|miércoles|jueves|viernes|sábado|mi[é]*r|vie|mar|lun|jue|sab|dom)/gi, " ");
     t = t.replace(/\d{1,2}(?::\d{2})?\s*(?:-|–|—|a|al|to|hasta)\s*\d{1,2}(?::\d{2})?/gi, " ");
+    t = t.replace(/\s*[-–—]\s*/g, " ");
     t = t.replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig"), " ");
     t = t.replace(/^[\s,.\-–:]+|[\s,.\-–:]+$/g, "");
     t = t.replace(/\s+/g, " ").trim();
@@ -262,11 +296,34 @@
       cols.push($("col-" + c));
     }
 
+    cols.forEach(function (col) {
+      col.addEventListener("dragover", function (e) { e.preventDefault(); col.classList.add("drop-hover"); });
+      col.addEventListener("dragleave", function () { col.classList.remove("drop-hover"); });
+      col.addEventListener("drop", function (e) {
+        e.preventDefault();
+        col.classList.remove("drop-hover");
+        var id = e.dataTransfer.getData("text/plain");
+        if (!id) return;
+        var targetDay = parseInt(col.getAttribute("data-day"), 10);
+        if (isNaN(targetDay)) return;
+        state.events.forEach(function (ev) {
+          if (String(ev.id) === String(id)) ev.day = targetDay;
+        });
+        save();
+        renderWeek();
+      });
+    });
+
     state.events.forEach(function (ev) {
       if (ev.day < 0 || ev.day > 6) return;
       var div = document.createElement("div");
       div.className = "event cls " + colorClass(ev.title);
       div.style.height = Math.max(34, (ev.end - ev.start) / 12 * 14 + 14) + "px";
+      div.draggable = true;
+      div.addEventListener("dragstart", function (e) {
+        e.dataTransfer.setData("text/plain", String(ev.id));
+        e.dataTransfer.effectAllowed = "move";
+      });
 
       var x = document.createElement("span");
       x.className = "ev-x";
@@ -275,40 +332,32 @@
       x.addEventListener("click", function (e) {
         e.stopPropagation();
         state.events = state.events.filter(function (it) { return it !== ev; });
+        if (editingId === ev.id) {
+          editingId = null;
+          els.addBtn.textContent = "＋";
+          els.evTitle.value = "";
+        }
         renderWeek();
         save();
       });
 
       var lbl = document.createElement("div");
       lbl.textContent = fmt(ev.start) + "–" + fmt(ev.end) + "  " + ev.title;
-      lbl.addEventListener("click", function () {
-        state.events = state.events.filter(function (it) { return it !== ev; });
+      lbl.addEventListener("click", function (e) {
+        e.stopPropagation();
+        editingId = ev.id;
         els.evTitle.value = ev.title;
         els.evDay.value = ev.day;
         els.evStart.value = fmt(ev.start);
         els.evEnd.value = fmt(ev.end);
         els.addBtn.textContent = "✓ Guardar";
-        save();
+        els.addBtn.scrollIntoView({ behavior: "smooth", block: "nearest" });
       });
 
       div.appendChild(x);
       div.appendChild(lbl);
       cols[ev.day].appendChild(div);
     });
-
-    // selector de días
-    els.evDay.innerHTML = "";
-    var o;
-    for (var i = 1; i < 7; i++) {
-      o = document.createElement("option");
-      o.value = i;
-      o.textContent = DAYS[i].charAt(0).toUpperCase() + DAYS[i].slice(1);
-      els.evDay.appendChild(o);
-    }
-    o = document.createElement("option");
-    o.value = 0;
-    o.textContent = "Domingo";
-    els.evDay.appendChild(o);
   }
 
   function fmt(t) {
@@ -322,20 +371,42 @@
     var title = els.evTitle.value.trim();
     if (!title) return;
     var day = parseInt(els.evDay.value, 10);
-    var start = timeToMin(els.evStart.value) || 8 * 60;
-    var end = timeToMin(els.evEnd.value) || 10 * 60;
+    var start = timeToMin(els.evStart.value);
+    var end = timeToMin(els.evEnd.value);
+    if (start === null) start = 8 * 60;
+    if (end === null) end = 10 * 60;
     if (end <= start) end = start + 60;
 
-    var exists = state.events.some(function (ev) {
-      return norm(ev.title) === norm(title) && ev.day === day && ev.start === start && ev.end === end;
-    });
-    if (!exists) {
-      state.events.push({ title: title, day: day, start: start, end: end });
+    if (editingId !== null) {
+      state.events.forEach(function (ev) {
+        if (String(ev.id) === String(editingId)) {
+          ev.title = title;
+          ev.day = day;
+          ev.start = start;
+          ev.end = end;
+        }
+      });
+      editingId = null;
+    } else {
+      var exists = state.events.some(function (ev) {
+        return norm(ev.title) === norm(title) && ev.day === day && ev.start === start && ev.end === end;
+      });
+      if (!exists) {
+        state.events.push({ id: uid(), title: title, day: day, start: start, end: end });
+      }
     }
     els.addBtn.textContent = "＋";
     els.evTitle.value = "";
     renderWeek();
     save();
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && editingId !== null) {
+      editingId = null;
+      els.addBtn.textContent = "＋";
+      els.evTitle.value = "";
+    }
   });
 
   els.importBtn.addEventListener("click", function () { els.importInput.click(); });
@@ -347,11 +418,11 @@
         var s = JSON.parse(r.result);
         if (s && Array.isArray(s.events)) {
           state.name = s.name || state.name;
-          state.events = s.events;
+          state.events = sanitize(s.events);
           save();
           renderWeek();
           els.stepCal.hidden = false;
-          setStatus("Horario importado correctamente.", "ok");
+          setStatus("Horario importado correctamente (" + state.events.length + " clases).", "ok");
         } else {
           setStatus("Ese archivo no parece un horario válido.", "error");
         }
@@ -367,7 +438,7 @@
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
     a.href = url;
-    var d = new Date(), ds = d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+    var d = new Date(), ds = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
     a.download = "mi-horario-" + ds + ".json";
     a.click();
     setTimeout(function () { URL.revokeObjectURL(url); }, 100);
@@ -376,6 +447,21 @@
   els.printBtn.addEventListener("click", function () { window.print(); });
 
   /* ---------------- init ---------------- */
+
+  (function buildDayOptions() {
+    els.evDay.innerHTML = "";
+    var o;
+    for (var i = 1; i < 7; i++) {
+      o = document.createElement("option");
+      o.value = i;
+      o.textContent = DAYS[i].charAt(0).toUpperCase() + DAYS[i].slice(1);
+      els.evDay.appendChild(o);
+    }
+    o = document.createElement("option");
+    o.value = 0;
+    o.textContent = "Domingo";
+    els.evDay.appendChild(o);
+  })();
 
   load();
   if (state.events.length) {
