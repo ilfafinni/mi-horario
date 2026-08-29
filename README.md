@@ -9,6 +9,18 @@ Página web que aísla **solo tu horario** a partir de una foto/captura que cont
 3. **Reconocer (OCR):** la imagen se lee en tu navegador con [Tesseract.js](https://tesseract.projectnaptha.com/). No se envía nada a ningún servidor.
 4. **Revisa el texto** detectado (el OCR no es 100% perfecto) y pulsa **Generar mi calendario**.
 5. La app detecta automáticamente **las líneas que contienen tu nombre**, extrae día y hora, y solo con eso arma tu calendario semanal.
+
+### 🆕 Análisis de tabla (horarios con columnas)
+
+Si tu horario es una **tabla** (primera columna = nombres, y después una columna por día de la semana), la app ahora usa las **coordenadas de las palabras** que devuelve el OCR para reconstruir las columnas. Así sabe a qué día pertenece cada celda y qué nombre está en cada fila, en vez de asumir un día "que se va hacia el lado". Esto funciona bien con tablas tipo:
+
+```
+            Lunes         Martes
+Ana García  08:00-10:00   10:15-12:00
+Juan Pérez  --            07:45-08:30
+```
+
+Solo se toman las celdas de la fila del nombre que pusiste en el paso 1. Si no se detectan columnas (o en cualquier otro caso), la app cae al análisis de texto plano de antes.
 6. Pulsa una clase para **editarla**, arrástrala a otro día para **moverla** o usa **×** para quitarla; todo se guarda en tu navegador (Esc cancela una edición).
 
 ## Guardar / respaldar
@@ -38,4 +50,4 @@ Abre `app.js` y busca `DAYS`, `colorClass` o `parseSchedule` para ajustar los no
 
 ## Tests
 
-`node tests/schedule.test.js` comprueba el parseo del texto OCR (celdas, nombre en línea vecina, horas pegadas, formato de horas) y la saneación de datos importados.
+`node tests/schedule.test.js` comprueba el parseo del texto OCR (celdas, nombre en línea vecina, horas pegadas, formato de horas), la reconstrucción de tablas con coordenadas (`parseTable`) y la saneación de datos importados.

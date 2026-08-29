@@ -33,6 +33,7 @@
 
   var state = { name: "", events: [] };
   var editingId = null;
+  var lastWords = null; // { lines: [{text, words:[{text,bbox}]}], words:[{text,bbox}] }
 
   function uid() {
     return "e" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -165,12 +166,20 @@
     if (!els.preview.src) return;
     setStatus("Reconociendo texto… ⏳", "loading");
     els.ocrBtn.disabled = true;
+    lastWords = null;
     Tesseract.recognize(els.preview.src, "spa+eng", {
       logger: function (m) {
         if (m.status === "recognizing text") setStatus("Reconociendo… " + Math.round(m.progress * 100) + "%", "loading");
       }
     }).then(function (r) {
       els.ocrText.value = r.data.text;
+      lastWords = {
+        text: r.data.text,
+        words: (r.data.words || []).map(function (w) {
+          var t = (w.text || "").trim();
+          return t ? { text: t, x: w.bbox.x0, y: w.bbox.y0, x2: w.bbox.x1, y2: w.bbox.y1 } : null;
+        }).filter(Boolean)
+      };
       els.stepText.hidden = false;
       els.ocrBtn.disabled = false;
       setStatus("¡Texto listo! Revisa el paso 3 y corrige si hace falta.", "ok");
@@ -189,7 +198,15 @@
       setStatus("Escribe primero tu nombre en el paso 1.", "error");
       return;
     }
-    var events = parseSchedule(els.ocrText.value, state.name);
+    var events;
+    // 1) Intento reconstruir la tabla usando las coordenadas del OCR
+    if (lastWords && lastWords.words.length) {
+      events = parseTable(lastWords.words, state.name);
+    }
+    // 2) Si no, respaldo con el parseo de texto plano
+    if (!events || !events.length) {
+      events = parseSchedule(els.ocrText.value, state.name);
+    }
     if (!events.length) {
       setStatus("No encontré clases con tu nombre («" + state.name + "») y una hora. Revisa el texto del paso 3.", "error");
       return;
@@ -201,6 +218,130 @@
     setStatus("Encontré " + events.length + " clase(s) tuya(s).", "ok");
     els.stepCal.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+
+  /* Reconstruye una tabla a partir de las coordenadas de palabras del OCR.
+     Estructura esperada:
+       fila superior  -> nombres de los días (columnas)
+       columna izq.   -> nombres de las personas (cada fila)
+       resto          -> celdas con horas/clases
+     Devuelve los eventos SOLO de la fila cuyo nombre coincide con `name`.
+  */
+  function parseTable(words, name) {
+    var out = [];
+    var seen = {};
+    var normName = norm(name);
+    if (!words || !words.length) return out;
+
+    // ---- 1) Agrupar palabras en líneas por cercanía vertical ----
+    var lineGroups = [];
+    var used = words.map(function () { return false; });
+    var i, j;
+
+    for (i = 0; i < words.length; i++) {
+      if (used[i]) continue;
+      var group = [words[i]];
+      used[i] = true;
+      for (j = 0; j < words.length; j++) {
+        if (i === j || used[j]) continue;
+        var a = (words[i].y + words[i].y2) / 2;
+        var b = (words[j].y + words[j].y2) / 2;
+        if (Math.abs(a - b) <= 14) { group.push(words[j]); used[j] = true; }
+      }
+      group.sort(function (p, q) { return (p.x + p.x2) / 2 - (q.x + q.x2) / 2; });
+      lineGroups.push(group);
+    }
+    lineGroups.sort(function (A, B) { return (A[0].y + A[0].y2) / 2 - (B[0].y + B[0].y2) / 2; });
+
+    // ---- 2) Detectar la fila de encabezado y las columnas de días ----
+    var dayCols = null; // [{day, cx, x0, x1}] ordenados por posición
+    var headerY = null;
+    var L, k;
+    for (L = 0; L < lineGroups.length; L++) {
+      var found = [];
+      lineGroups[L].forEach(function (w) {
+        var d = dayIndexOf(w.text);
+        if (d >= 0) found.push({ day: d, cx: (w.x + w.x2) / 2, x0: w.x, x1: w.x2 });
+      });
+      if (found.length >= 2) {
+        found.sort(function (a, b) { return a.cx - b.cx; });
+        dayCols = found;
+        headerY = lineGroups[L][0].y;
+        break;
+      }
+    }
+
+    // Sin encabezado de días no podemos saber las columnas.
+    if (!dayCols) return out;
+
+    // Límite izquierdo de la región de columnas de día: el inicio de la 1ª columna.
+    var firstDayX = dayCols[0].x0;
+
+    // Mitad del espaciado típico entre columnas, usado para encajar celdas en su columna.
+    var halfColSpacing = 60;
+    if (dayCols.length >= 2) {
+      var spacing = dayCols[1].cx - dayCols[0].cx;
+      halfColSpacing = Math.max(40, spacing / 2);
+    }
+
+    // ---- 3) Asignar las celdas de cada fila a su columna de día ----
+    for (k = 0; k < lineGroups.length; k++) {
+      var line = lineGroups[k];
+      if (headerY !== null && line[0].y <= headerY + 8) continue;
+
+      var leftNames = [];
+      var cells = []; // {day, text}
+      var sawDay = false;
+
+      line.forEach(function (w) {
+        var cx = (w.x + w.x2) / 2;
+        // Si la palabra está claramente a la izquierda de la 1ª columna de día -> nombre
+        if (w.x2 <= firstDayX) {
+          leftNames.push(w.text);
+          return;
+        }
+        // En caso de solaparse con el borde, resolver por centro respecto a la columna de día
+        var day = -1;
+        var best = -1, bestDist = Infinity;
+        for (var c = 0; c < dayCols.length; c++) {
+          var dist = Math.abs(cx - dayCols[c].cx);
+          if (dist < bestDist) { bestDist = dist; best = c; }
+        }
+        // Solo cuenta como celda de día si el centro cae dentro de la mitad de su columna
+        if (bestDist < halfColSpacing) { day = dayCols[best].day; }
+        if (day >= 0) {
+          cells.push({ day: day, text: w.text });
+          sawDay = true;
+        } else {
+          // texto entre columnas: acumular en la columna anterior como parte de su celda
+          leftNames.push(w.text);
+        }
+      });
+
+      if (!sawDay) continue;
+      var rowHasUser = norm(leftNames.join(" ")).indexOf(normName) !== -1;
+      if (!rowHasUser) continue;
+
+      // Agrupar palabras por columna -> texto de cada celda
+      var cellText = {};
+      cells.forEach(function (cl) {
+        cellText[cl.day] = (cellText[cl.day] || "") + " " + cl.text;
+      });
+      Object.keys(cellText).forEach(function (dk) {
+        var day = parseInt(dk, 10);
+        var txt = cellText[dk].trim();
+        var range = timeRangeOf(txt);
+        if (day < 0 || day > 6 || !range) return;
+        var start = range.start, end = range.end;
+        var t = cleanTitle(txt, name);
+        var key = day + "|" + start + "|" + t;
+        if (seen[key]) return;
+        seen[key] = true;
+        out.push({ id: uid(), title: t, day: day, start: start, end: end, src: txt });
+      });
+    }
+
+    return out;
+  }
 
   function parseSchedule(text, name) {
     var lines = text.split(/\r?\n/);
