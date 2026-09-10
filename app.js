@@ -97,11 +97,13 @@
     } catch (e) {}
   }
 
-  function ghHeaders() {
-    return {
+  function ghHeaders(withContentType) {
+    var h = {
       "Authorization": "token " + ghConfig.token,
       "Accept": "application/vnd.github.v3+json"
     };
+    if (withContentType) h["Content-Type"] = "application/json";
+    return h;
   }
 
   function ghApiUrl(path) {
@@ -215,39 +217,27 @@
 
     var reader = new FileReader();
     reader.onload = async function () {
-      var img = new Image();
-      img.onload = async function () {
-        var canvas = document.createElement("canvas");
-        var MAX = 1200;
-        var w = img.width, h = img.height;
-        if (w > MAX || h > MAX) {
-          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-          else { w = Math.round(w * MAX / h); h = MAX; }
-        }
-        canvas.width = w;
-        canvas.height = h;
-        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-        var base64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+      var base64, filename;
+      var canProcess = true;
 
-        var filename = Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/\.(png|gif|webp)$/i, ".jpg");
-
+      var done = async function (content, name) {
         try {
-          var resp = await fetch(ghApiUrl(filename), {
+          var resp = await fetch(ghApiUrl(name), {
             method: "PUT",
-            headers: ghHeaders(),
+            headers: ghHeaders(true),
             body: JSON.stringify({
-              message: "Subir imagen: " + filename,
-              content: base64
+              message: "Subir imagen: " + name,
+              content: content
             })
           });
           if (resp.status === 401) {
-            throw new Error("Token rechazado. Revísalo o genéralo de nuevo.");
+            throw new Error("Token rechazado. Genera un token nuevo en github.com/settings/tokens con permiso repo.");
           }
           if (resp.status === 403) {
             throw new Error("El token no tiene permisos de escritura (repo).");
           }
           if (resp.status === 422) {
-            throw new Error("Archivo inválido o nombre no permitido.");
+            throw new Error("GitHub rechazó el archivo. Revisa el nombre o el tamaño de la imagen.");
           }
           if (!resp.ok) {
             var errBody = await resp.json().catch(function () { return {}; });
@@ -258,6 +248,36 @@
         } catch (e) {
           setGalleryStatus("Error al subir: " + e.message, "error");
         }
+      };
+
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var canvas = document.createElement("canvas");
+          var MAX = 1200;
+          var w = img.width, h = img.height;
+          if (w > MAX || h > MAX) {
+            if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+            else { w = Math.round(w * MAX / h); h = MAX; }
+          }
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          base64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+          filename = Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/\.(png|gif|webp)$/i, ".jpg");
+        } catch (err) {
+          canProcess = false;
+        }
+        if (canProcess) {
+          done(base64, filename);
+        } else {
+          filename = Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+          done(reader.result.split(",")[1], filename);
+        }
+      };
+      img.onerror = function () {
+        filename = Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        done(reader.result.split(",")[1], filename);
       };
       img.src = reader.result;
     };
@@ -276,13 +296,17 @@
     try {
       var resp = await fetch(ghApiUrl(img.name), {
         method: "DELETE",
-        headers: ghHeaders(),
+        headers: ghHeaders(true),
         body: JSON.stringify({
           message: "Eliminar imagen: " + img.name,
           sha: img.sha
         })
       });
-      if (!resp.ok) throw new Error("Error " + resp.status);
+      if (resp.status === 401) throw new Error("Token rechazado o revocado.");
+      if (!resp.ok) {
+        var errBody = await resp.json().catch(function () { return {}; });
+        throw new Error("Error " + resp.status + ": " + (errBody.message || "desconocido"));
+      }
       setGalleryStatus("Imagen eliminada.", "ok");
       loadGallery();
     } catch (e) {
