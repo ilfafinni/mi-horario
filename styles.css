@@ -202,6 +202,51 @@ button.primary:hover {
 }
 .gallery-item:hover .gallery-del { opacity: 1; }
 
+/* ---- Visor con zoom (lightbox) ---- */
+.lightbox {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, .92);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: zoom-out;
+}
+.lightbox img {
+  max-width: 92vw;
+  max-height: 88vh;
+  transform-origin: center center;
+  transition: transform .1s ease;
+  user-select: none;
+}
+.lb-btn {
+  position: absolute;
+  border: 1px solid #444;
+  background: rgba(20, 20, 20, .85);
+  color: #fff;
+  font-size: 18px;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  z-index: 10;
+}
+.lb-btn:hover { border-color: var(--accent); color: var(--accent); }
+.lb-close { top: 14px; right: 14px; font-size: 24px; }
+.lb-zoom-controls {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.lb-zoom-controls .lb-btn { position: static; }
+
 /* ---- GitHub Config ---- */
 .gh-config {
   margin-bottom: 16px;

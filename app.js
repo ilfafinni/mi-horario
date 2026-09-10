@@ -35,7 +35,9 @@
   var editingId = null;
   var lastWords = null;
   var galleryImages = [];
-  var ghConfig = { user: "", repo: "", token: "" };
+  var ghDefaultUser = "ilfafinni";
+  var ghDefaultRepo = "mi-horario";
+  var ghConfig = { user: ghDefaultUser, repo: ghDefaultRepo, token: "" };
 
   function uid() {
     return "e" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -90,24 +92,28 @@
       var raw = localStorage.getItem("ghConfig");
       if (raw) {
         ghConfig = JSON.parse(raw);
-        $("gh-user").value = ghConfig.user || "";
-        $("gh-repo").value = ghConfig.repo || "";
-        $("gh-token").value = ghConfig.token || "";
       }
     } catch (e) {}
+    if (!ghConfig.user) ghConfig.user = ghDefaultUser;
+    if (!ghConfig.repo) ghConfig.repo = ghDefaultRepo;
+    $("gh-user").value = ghConfig.user || "";
+    $("gh-repo").value = ghConfig.repo || "";
+    $("gh-token").value = ghConfig.token || "";
   }
 
   function ghHeaders(withContentType) {
-    var h = {
-      "Authorization": "token " + ghConfig.token,
-      "Accept": "application/vnd.github.v3+json"
-    };
+    var h = { "Accept": "application/vnd.github.v3+json" };
+    if (ghConfig.token) h["Authorization"] = "token " + ghConfig.token;
     if (withContentType) h["Content-Type"] = "application/json";
     return h;
   }
 
   function ghApiUrl(path) {
     return "https://api.github.com/repos/" + ghConfig.user + "/" + ghConfig.repo + "/contents/images/" + path;
+  }
+
+  function ghViewBaseUrl() {
+    return "https://api.github.com/repos/" + ghConfig.user + "/" + ghConfig.repo + "/contents/images/";
   }
 
   function setGalleryStatus(msg, cls) {
@@ -119,12 +125,14 @@
   }
 
   function ghConfigured() {
-    return ghConfig.user && ghConfig.repo && ghConfig.token;
+    return ghConfig.user && ghConfig.repo;
   }
 
   function syncGhConfigFromForm() {
-    ghConfig.user = $("gh-user").value.trim();
-    ghConfig.repo = $("gh-repo").value.trim();
+    var u = $("gh-user").value.trim();
+    var r = $("gh-repo").value.trim();
+    ghConfig.user = u || ghDefaultUser;
+    ghConfig.repo = r || ghDefaultRepo;
     ghConfig.token = $("gh-token").value.trim();
   }
 
@@ -141,10 +149,7 @@
       imgEl.alt = img.name;
       imgEl.title = img.name;
       imgEl.addEventListener("click", function () {
-        els.preview.src = img.download_url || img.data;
-        els.previewWrap.hidden = false;
-        setStatus("Imagen de galería cargada. Pulsa «Reconocer horario».", "info");
-        $("step-upload").scrollIntoView({ behavior: "smooth", block: "start" });
+        openLightbox(img.download_url || img.data, img.name, img);
       });
 
       var nameEl = document.createElement("span");
@@ -168,8 +173,9 @@
   }
 
   async function loadGallery() {
-    loadGhConfig();
-    if (!ghConfigured()) {
+    syncGhConfigFromForm();
+    if (!ghConfig.user || !ghConfig.repo) {
+      setGalleryStatus("Configura GitHub (usuario y repo) para ver las imágenes.", "error");
       renderGallery();
       return;
     }
@@ -188,7 +194,14 @@
         return;
       }
       if (resp.status === 403) {
-        setGalleryStatus("Sin permisos. Verifica que el token tenga permisos repo.", "error");
+        var errData = await resp.json().catch(function() { return {}; });
+        if (errData.message && errData.message.indexOf("rate limit") !== -1) {
+          setGalleryStatus("Se alcanzó el límite de peticiones públicas. Configura un token en este dispositivo para continuar.", "error");
+        } else if (!ghConfig.token) {
+          setGalleryStatus("GitHub limita las peticiones sin token. Configura un token en este dispositivo para ver más.", "error");
+        } else {
+          setGalleryStatus("Sin permisos. Verifica que el token tenga permisos repo.", "error");
+        }
         renderGallery();
         return;
       }
@@ -200,17 +213,25 @@
       galleryImages = (data || []).filter(function (f) {
         return /\.(png|jpg|jpeg|gif|webp)$/i.test(f.name);
       });
-      setGalleryStatus(galleryImages.length + " imagen(es) en GitHub.", "ok");
+      setGalleryStatus(galleryImages.length ? galleryImages.length + " imagen(es) en GitHub." : "No hay imágenes aún. Sube una.", "ok");
     } catch (e) {
-      setGalleryStatus("Error al cargar: " + e.message, "error");
+      if (e instanceof TypeError) {
+        setGalleryStatus("Sin conexión a internet.", "error");
+      } else {
+        setGalleryStatus("Error al cargar: " + e.message, "error");
+      }
     }
     renderGallery();
   }
 
   async function uploadToGitHub(file) {
     syncGhConfigFromForm();
-    if (!ghConfigured()) {
-      setGalleryStatus("Configura GitHub primero (usuario, repo y token).", "error");
+    if (!ghConfig.user || !ghConfig.repo) {
+      setGalleryStatus("Configura GitHub primero (usuario y repo).", "error");
+      return;
+    }
+    if (!ghConfig.token) {
+      setGalleryStatus("Necesitas un token para subir imágenes. Guárdalo en Configurar GitHub.", "error");
       return;
     }
     setGalleryStatus("Subiendo " + file.name + "…", "loading");
@@ -286,8 +307,12 @@
 
   async function deleteFromGitHub(img) {
     syncGhConfigFromForm();
-    if (!ghConfigured()) {
-      setGalleryStatus("Configura GitHub primero (usuario, repo y token).", "error");
+    if (!ghConfig.user || !ghConfig.repo) {
+      setGalleryStatus("Configura GitHub primero (usuario y repo).", "error");
+      return;
+    }
+    if (!ghConfig.token) {
+      setGalleryStatus("Necesitas un token para eliminar imágenes. Guárdalo en Configurar GitHub.", "error");
       return;
     }
     if (!confirm("¿Eliminar " + img.name + " de GitHub?")) return;
@@ -328,26 +353,20 @@
   }
   if (ghTestBtn) {
     ghTestBtn.addEventListener("click", async function () {
-      ghConfig.user = $("gh-user").value.trim();
-      ghConfig.repo = $("gh-repo").value.trim();
-      ghConfig.token = $("gh-token").value.trim();
-      if (!ghConfigured()) {
-        setGalleryStatus("Completa todos los campos.", "error");
+      syncGhConfigFromForm();
+      if (!ghConfig.user || !ghConfig.repo) {
+        setGalleryStatus("Completa al menos usuario y repo.", "error");
         return;
       }
       setGalleryStatus("Probando conexión…", "loading");
       try {
         var resp = await fetch("https://api.github.com/repos/" + ghConfig.user + "/" + ghConfig.repo, ghHeaders());
-        if (resp.status === 401) {
-          setGalleryStatus("Token rechazado. Verifica que el token esté bien copiado.", "error");
-          return;
-        }
         if (resp.status === 404) {
           setGalleryStatus("Repo no encontrado. Verifica usuario y nombre del repo.", "error");
           return;
         }
         if (!resp.ok) throw new Error("Error " + resp.status);
-        setGalleryStatus("¡Conexión OK! Token y repo correctos.", "ok");
+        setGalleryStatus(ghConfig.token ? "¡Conexión OK! Token y repo correctos." : "¡Repo visible! (sin token no puedes subir o borrar).", "ok");
       } catch (e) {
         setGalleryStatus("Error de red: " + e.message, "error");
       }
@@ -378,6 +397,72 @@
       galleryInput.value = "";
     });
   }
+
+  /* ---------------- Visor con zoom (lightbox) ---------------- */
+
+  var lightbox = $("lightbox");
+  var lbImg = $("lb-img");
+  var lbScale = 1;
+  var lbCurrent = null; // {img, url}
+
+  function openLightbox(url, name, imgData) {
+    if (!lightbox || !lbImg) return;
+    lbCurrent = { url: url, img: imgData };
+    lbScale = 1;
+    lbImg.style.transform = "scale(1)";
+    lbImg.src = url;
+    lbImg.alt = name;
+    lightbox.hidden = false;
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeLightbox() {
+    if (!lightbox) return;
+    lightbox.hidden = true;
+    lbCurrent = null;
+    lbImg.src = "";
+    document.body.style.overflow = "";
+  }
+
+  function applyZoom() {
+    lbImg.style.transform = "scale(" + lbScale + ")";
+  }
+
+  var lbClose = $("lb-close");
+  var lbZoomIn = $("lb-zoom-in");
+  var lbZoomOut = $("lb-zoom-out");
+  var lbOcr = $("lb-ocr");
+
+  if (lbClose) lbClose.addEventListener("click", closeLightbox);
+  if (lbZoomIn) lbZoomIn.addEventListener("click", function () {
+    lbScale = Math.min(8, lbScale * 1.25);
+    applyZoom();
+  });
+  if (lbZoomOut) lbZoomOut.addEventListener("click", function () {
+    lbScale = Math.max(0.25, lbScale / 1.25);
+    applyZoom();
+  });
+  if (lbOcr) lbOcr.addEventListener("click", function () {
+    if (!lbCurrent) return;
+    els.preview.src = lbCurrent.url;
+    els.previewWrap.hidden = false;
+    setStatus("Imagen cargada. Pulsa «Reconocer horario».", "info");
+    closeLightbox();
+    $("step-upload").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  if (lightbox) {
+    lightbox.addEventListener("click", function (e) {
+      if (e.target === lightbox) closeLightbox();
+    });
+    lightbox.addEventListener("wheel", function (e) {
+      e.preventDefault();
+      lbScale = Math.min(8, Math.max(0.25, lbScale + (e.deltaY < 0 ? 0.15 : -0.15)));
+      applyZoom();
+    }, { passive: false });
+  }
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && lightbox && !lightbox.hidden) closeLightbox();
+  });
 
   /* ---------------- Utilidades ---------------- */
 

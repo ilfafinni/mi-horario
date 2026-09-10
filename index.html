@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>mi-horario</title>
-  <link rel="stylesheet" href="styles.css?v=4" />
+  <link rel="stylesheet" href="styles.css?v=5" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90' fill='%2300ff41'>_</text></svg>" />
 </head>
 <body>
@@ -43,6 +43,17 @@
       <div id="gallery-status" class="status" hidden></div>
       <div id="gallery" class="gallery"></div>
     </section>
+
+    <!-- VISOR CON ZOOM -->
+    <div id="lightbox" class="lightbox" hidden>
+      <button id="lb-close" class="lb-btn lb-close" title="Cerrar (Esc)">×</button>
+      <div class="lb-zoom-controls">
+        <button id="lb-zoom-out" class="lb-btn" title="Alejar">−</button>
+        <button id="lb-zoom-in" class="lb-btn" title="Acercar">+</button>
+        <button id="lb-ocr" class="lb-btn" title="Usar esta imagen con el OCR">OCR</button>
+      </div>
+      <img id="lb-img" alt="Imagen ampliada" draggable="false" />
+    </div>
 
     <!-- PASO 1: nombre -->
     <section class="card" id="step-name">
@@ -111,6 +122,6 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>
