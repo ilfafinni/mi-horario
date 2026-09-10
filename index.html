@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mi Horario</title>
+  <title>mi-horario</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90' fill='%2300ff41'>_</text></svg>" />
 </head>
 <body>
   <header>
-    <h1>📅 Mi Horario</h1>
+    <h1>mi-horario</h1>
     <p class="sub">Sube la foto del horario completo (tuyo + compañeros) y aíslo solo el tuyo.</p>
   </header>
 
@@ -20,7 +20,7 @@
       <p class="hint">Sube imágenes de tus horarios. Se guardarán en GitHub.</p>
       <div class="gh-config" id="gh-config">
         <details>
-          <summary>⚙️ Configurar GitHub</summary>
+          <summary>Configurar GitHub</summary>
           <div class="gh-form">
             <label>Usuario: <input type="text" id="gh-user" placeholder="tu-usuario" /></label>
             <label>Repo: <input type="text" id="gh-repo" placeholder="mi-horario" /></label>
@@ -35,7 +35,7 @@
       </div>
       <div class="drop" id="gallery-drop">
         <input type="file" id="gallery-input" accept="image/*" multiple hidden />
-        <p>📷 Arrastra imágenes aquí <br /><small>o haz clic para elegir archivos</small></p>
+        <p>&gt; Arrastra imágenes aquí <br /><small>o haz clic para elegir archivos</small></p>
       </div>
       <div id="gallery-status" class="status" hidden></div>
       <div id="gallery" class="gallery"></div>
@@ -55,7 +55,7 @@
       <h2>2 · Sube tu horario</h2>
       <div class="drop" id="dropzone">
         <input type="file" id="file-input" accept="image/*" hidden />
-        <p>📷 Arrastra aquí tu captura <br /><small>o haz clic para elegir un archivo</small></p>
+        <p>&gt; Arrastra aquí tu captura <br /><small>o haz clic para elegir un archivo</small></p>
       </div>
       <div id="preview-wrap" hidden>
         <img id="preview" alt="Previsualización" />
@@ -81,14 +81,14 @@
       <div class="cal-header">
         <h2>4 · Tu semana</h2>
         <div class="row right">
-          <button id="btn-export" title="Guardar en un archivo">💾 Exportar</button>
-          <button id="btn-import" title="Cargar un archivo">📂 Importar</button>
+          <button id="btn-export" title="Guardar en un archivo">[export]</button>
+          <button id="btn-import" title="Cargar un archivo">[import]</button>
           <input type="file" id="import-input" accept=".json,application/json" hidden />
-          <button id="btn-print" title="Imprimir">🖨️ Imprimir</button>
+          <button id="btn-print" title="Imprimir">[print]</button>
         </div>
       </div>
       <div id="week" class="week"></div>
-      <p class="hint">💡 Pulsa una clase para editarla, arrástrala a otro día para moverla, y usa × para quitarla.</p>
+      <p class="hint">Pulsa una clase para editarla, arrástrala a otro día para moverla, y usa × para quitarla.</p>
       <div class="cal-header">
         <h3>Editar</h3>
         <div class="row">
@@ -104,7 +104,7 @@
   </main>
 
   <footer>
-    <p>Los datos se guardan en tu navegador. Usa 💾 Exportar para guardar una copia como archivo.</p>
+    <p>Los datos se guardan en tu navegador. Usa [export] para guardar una copia como archivo.</p>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
