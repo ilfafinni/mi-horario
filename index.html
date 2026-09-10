@@ -14,6 +14,33 @@
   </header>
 
   <main>
+    <!-- GALERÍA DE IMÁGENES -->
+    <section class="card" id="gallery-section">
+      <h2>Galería de imágenes</h2>
+      <p class="hint">Sube imágenes de tus horarios. Se guardarán en GitHub.</p>
+      <div class="gh-config" id="gh-config">
+        <details>
+          <summary>⚙️ Configurar GitHub</summary>
+          <div class="gh-form">
+            <label>Usuario: <input type="text" id="gh-user" placeholder="tu-usuario" /></label>
+            <label>Repo: <input type="text" id="gh-repo" placeholder="mi-horario" /></label>
+            <label>Token: <input type="password" id="gh-token" placeholder="ghp_..." /></label>
+            <div class="row">
+              <button id="gh-save" class="primary">Guardar config</button>
+              <button id="gh-test">Probar conexión</button>
+            </div>
+            <p class="hint">El token se guarda solo en tu navegador. <a href="https://github.com/settings/tokens" target="_blank">Crear token</a> (necesita permisos <code>repo</code>).</p>
+          </div>
+        </details>
+      </div>
+      <div class="drop" id="gallery-drop">
+        <input type="file" id="gallery-input" accept="image/*" multiple hidden />
+        <p>📷 Arrastra imágenes aquí <br /><small>o haz clic para elegir archivos</small></p>
+      </div>
+      <div id="gallery-status" class="status" hidden></div>
+      <div id="gallery" class="gallery"></div>
+    </section>
+
     <!-- PASO 1: nombre -->
     <section class="card" id="step-name">
       <h2>1 · ¿Cómo te llamas?</h2>

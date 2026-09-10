@@ -33,7 +33,9 @@
 
   var state = { name: "", events: [] };
   var editingId = null;
-  var lastWords = null; // { lines: [{text, words:[{text,bbox}]}], words:[{text,bbox}] }
+  var lastWords = null;
+  var galleryImages = [];
+  var ghConfig = { user: "", repo: "", token: "" };
 
   function uid() {
     return "e" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -78,6 +80,239 @@
         }
       }
     } catch (e) {}
+    loadGallery();
+  }
+
+  /* ---------------- Galería GitHub ---------------- */
+
+  function loadGhConfig() {
+    try {
+      var raw = localStorage.getItem("ghConfig");
+      if (raw) {
+        ghConfig = JSON.parse(raw);
+        $("gh-user").value = ghConfig.user || "";
+        $("gh-repo").value = ghConfig.repo || "";
+        $("gh-token").value = ghConfig.token || "";
+      }
+    } catch (e) {}
+  }
+
+  function ghHeaders() {
+    return {
+      "Authorization": "token " + ghConfig.token,
+      "Accept": "application/vnd.github.v3+json",
+      "Content-Type": "application/json"
+    };
+  }
+
+  function ghApiUrl(path) {
+    return "https://api.github.com/repos/" + ghConfig.user + "/" + ghConfig.repo + "/contents/images/" + path;
+  }
+
+  function setGalleryStatus(msg, cls) {
+    var el = $("gallery-status");
+    if (!el) return;
+    el.hidden = !msg;
+    el.className = "status " + (cls || "info");
+    el.textContent = msg;
+  }
+
+  function ghConfigured() {
+    return ghConfig.user && ghConfig.repo && ghConfig.token;
+  }
+
+  function renderGallery() {
+    var el = $("gallery");
+    if (!el) return;
+    el.innerHTML = "";
+    galleryImages.forEach(function (img) {
+      var div = document.createElement("div");
+      div.className = "gallery-item";
+
+      var imgEl = document.createElement("img");
+      imgEl.src = img.download_url || img.data;
+      imgEl.alt = img.name;
+      imgEl.title = img.name;
+      imgEl.addEventListener("click", function () {
+        els.preview.src = img.download_url || img.data;
+        els.previewWrap.hidden = false;
+        setStatus("Imagen de galería cargada. Pulsa «Reconocer horario».", "info");
+        $("step-upload").scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+
+      var nameEl = document.createElement("span");
+      nameEl.className = "gallery-name";
+      nameEl.textContent = img.name;
+
+      var delBtn = document.createElement("button");
+      delBtn.className = "gallery-del";
+      delBtn.textContent = "×";
+      delBtn.title = "Eliminar";
+      delBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        deleteFromGitHub(img);
+      });
+
+      div.appendChild(imgEl);
+      div.appendChild(nameEl);
+      div.appendChild(delBtn);
+      el.appendChild(div);
+    });
+  }
+
+  async function loadGallery() {
+    loadGhConfig();
+    if (!ghConfigured()) {
+      renderGallery();
+      return;
+    }
+    setGalleryStatus("Cargando imágenes…", "loading");
+    try {
+      var resp = await fetch(ghApiUrl(""), ghHeaders());
+      if (resp.status === 404) {
+        galleryImages = [];
+        setGalleryStatus("Carpeta de imágenes vacía.", "ok");
+        renderGallery();
+        return;
+      }
+      if (!resp.ok) throw new Error("Error " + resp.status);
+      var data = await resp.json();
+      galleryImages = (data || []).filter(function (f) {
+        return /\.(png|jpg|jpeg|gif|webp)$/i.test(f.name);
+      });
+      setGalleryStatus(galleryImages.length + " imagen(es) en GitHub.", "ok");
+    } catch (e) {
+      setGalleryStatus("Error al cargar: " + e.message, "error");
+    }
+    renderGallery();
+  }
+
+  async function uploadToGitHub(file) {
+    if (!ghConfigured()) {
+      setGalleryStatus("Configura GitHub primero.", "error");
+      return;
+    }
+    setGalleryStatus("Subiendo " + file.name + "…", "loading");
+
+    var reader = new FileReader();
+    reader.onload = async function () {
+      var img = new Image();
+      img.onload = async function () {
+        var canvas = document.createElement("canvas");
+        var MAX = 1200;
+        var w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        var base64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+
+        var filename = Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/\.(png|gif|webp)$/i, ".jpg");
+
+        try {
+          var resp = await fetch(ghApiUrl(filename), {
+            method: "PUT",
+            headers: ghHeaders(),
+            body: JSON.stringify({
+              message: "Subir imagen: " + filename,
+              content: base64
+            })
+          });
+          if (!resp.ok) throw new Error("Error " + resp.status);
+          setGalleryStatus("¡Imagen subida!", "ok");
+          loadGallery();
+        } catch (e) {
+          setGalleryStatus("Error al subir: " + e.message, "error");
+        }
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function deleteFromGitHub(img) {
+    if (!ghConfigured()) {
+      setGalleryStatus("Configura GitHub primero.", "error");
+      return;
+    }
+    if (!confirm("¿Eliminar " + img.name + " de GitHub?")) return;
+    setGalleryStatus("Eliminando…", "loading");
+
+    try {
+      var resp = await fetch(ghApiUrl(img.name), {
+        method: "DELETE",
+        headers: ghHeaders(),
+        body: JSON.stringify({
+          message: "Eliminar imagen: " + img.name,
+          sha: img.sha
+        })
+      });
+      if (!resp.ok) throw new Error("Error " + resp.status);
+      setGalleryStatus("Imagen eliminada.", "ok");
+      loadGallery();
+    } catch (e) {
+      setGalleryStatus("Error al eliminar: " + e.message, "error");
+    }
+  }
+
+  var ghSaveBtn = $("gh-save");
+  var ghTestBtn = $("gh-test");
+  if (ghSaveBtn) {
+    ghSaveBtn.addEventListener("click", function () {
+      ghConfig.user = $("gh-user").value.trim();
+      ghConfig.repo = $("gh-repo").value.trim();
+      ghConfig.token = $("gh-token").value.trim();
+      localStorage.setItem("ghConfig", JSON.stringify(ghConfig));
+      setGalleryStatus("Configuración guardada.", "ok");
+      loadGallery();
+    });
+  }
+  if (ghTestBtn) {
+    ghTestBtn.addEventListener("click", async function () {
+      ghConfig.user = $("gh-user").value.trim();
+      ghConfig.repo = $("gh-repo").value.trim();
+      ghConfig.token = $("gh-token").value.trim();
+      if (!ghConfigured()) {
+        setGalleryStatus("Completa todos los campos.", "error");
+        return;
+      }
+      setGalleryStatus("Probando conexión…", "loading");
+      try {
+        var resp = await fetch("https://api.github.com/repos/" + ghConfig.user + "/" + ghConfig.repo, ghHeaders());
+        if (!resp.ok) throw new Error("No se pudo acceder al repo (verifica token y nombre del repo)");
+        setGalleryStatus("¡Conexión OK!", "ok");
+      } catch (e) {
+        setGalleryStatus("Error: " + e.message, "error");
+      }
+    });
+  }
+
+  var galleryDrop = $("gallery-drop");
+  var galleryInput = $("gallery-input");
+  if (galleryDrop && galleryInput) {
+    galleryDrop.addEventListener("click", function () { galleryInput.click(); });
+    galleryDrop.addEventListener("dragover", function (e) { e.preventDefault(); galleryDrop.classList.add("over"); });
+    galleryDrop.addEventListener("dragleave", function () { galleryDrop.classList.remove("over"); });
+    galleryDrop.addEventListener("drop", function (e) {
+      e.preventDefault();
+      galleryDrop.classList.remove("over");
+      if (e.dataTransfer.files) {
+        Array.from(e.dataTransfer.files).forEach(function (f) {
+          if (f.type.indexOf("image/") === 0) uploadToGitHub(f);
+        });
+      }
+    });
+    galleryInput.addEventListener("change", function () {
+      if (galleryInput.files) {
+        Array.from(galleryInput.files).forEach(function (f) {
+          if (f.type.indexOf("image/") === 0) uploadToGitHub(f);
+        });
+      }
+      galleryInput.value = "";
+    });
   }
 
   /* ---------------- Utilidades ---------------- */
