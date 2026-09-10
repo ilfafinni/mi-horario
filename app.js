@@ -100,8 +100,7 @@
   function ghHeaders() {
     return {
       "Authorization": "token " + ghConfig.token,
-      "Accept": "application/vnd.github.v3+json",
-      "Content-Type": "application/json"
+      "Accept": "application/vnd.github.v3+json"
     };
   }
 
@@ -119,6 +118,12 @@
 
   function ghConfigured() {
     return ghConfig.user && ghConfig.repo && ghConfig.token;
+  }
+
+  function syncGhConfigFromForm() {
+    ghConfig.user = $("gh-user").value.trim();
+    ghConfig.repo = $("gh-repo").value.trim();
+    ghConfig.token = $("gh-token").value.trim();
   }
 
   function renderGallery() {
@@ -171,11 +176,24 @@
       var resp = await fetch(ghApiUrl(""), ghHeaders());
       if (resp.status === 404) {
         galleryImages = [];
-        setGalleryStatus("Carpeta de imágenes vacía.", "ok");
+        setGalleryStatus("Carpeta de imágenes vacía. Sube una imagen para comenzar.", "ok");
         renderGallery();
         return;
       }
-      if (!resp.ok) throw new Error("Error " + resp.status);
+      if (resp.status === 401) {
+        setGalleryStatus("Token inválido. Verifica tu token de GitHub.", "error");
+        renderGallery();
+        return;
+      }
+      if (resp.status === 403) {
+        setGalleryStatus("Sin permisos. Verifica que el token tenga permisos repo.", "error");
+        renderGallery();
+        return;
+      }
+      if (!resp.ok) {
+        var errData = await resp.json().catch(function() { return {}; });
+        throw new Error("Error " + resp.status + ": " + (errData.message || "Error desconocido"));
+      }
       var data = await resp.json();
       galleryImages = (data || []).filter(function (f) {
         return /\.(png|jpg|jpeg|gif|webp)$/i.test(f.name);
@@ -188,8 +206,9 @@
   }
 
   async function uploadToGitHub(file) {
+    syncGhConfigFromForm();
     if (!ghConfigured()) {
-      setGalleryStatus("Configura GitHub primero.", "error");
+      setGalleryStatus("Configura GitHub primero (usuario, repo y token).", "error");
       return;
     }
     setGalleryStatus("Subiendo " + file.name + "…", "loading");
@@ -221,7 +240,19 @@
               content: base64
             })
           });
-          if (!resp.ok) throw new Error("Error " + resp.status);
+          if (resp.status === 401) {
+            throw new Error("Token rechazado. Revísalo o genéralo de nuevo.");
+          }
+          if (resp.status === 403) {
+            throw new Error("El token no tiene permisos de escritura (repo).");
+          }
+          if (resp.status === 422) {
+            throw new Error("Archivo inválido o nombre no permitido.");
+          }
+          if (!resp.ok) {
+            var errBody = await resp.json().catch(function () { return {}; });
+            throw new Error("Error " + resp.status + ": " + (errBody.message || "desconocido"));
+          }
           setGalleryStatus("¡Imagen subida!", "ok");
           loadGallery();
         } catch (e) {
@@ -234,8 +265,9 @@
   }
 
   async function deleteFromGitHub(img) {
+    syncGhConfigFromForm();
     if (!ghConfigured()) {
-      setGalleryStatus("Configura GitHub primero.", "error");
+      setGalleryStatus("Configura GitHub primero (usuario, repo y token).", "error");
       return;
     }
     if (!confirm("¿Eliminar " + img.name + " de GitHub?")) return;
@@ -282,10 +314,18 @@
       setGalleryStatus("Probando conexión…", "loading");
       try {
         var resp = await fetch("https://api.github.com/repos/" + ghConfig.user + "/" + ghConfig.repo, ghHeaders());
-        if (!resp.ok) throw new Error("No se pudo acceder al repo (verifica token y nombre del repo)");
-        setGalleryStatus("¡Conexión OK!", "ok");
+        if (resp.status === 401) {
+          setGalleryStatus("Token rechazado. Verifica que el token esté bien copiado.", "error");
+          return;
+        }
+        if (resp.status === 404) {
+          setGalleryStatus("Repo no encontrado. Verifica usuario y nombre del repo.", "error");
+          return;
+        }
+        if (!resp.ok) throw new Error("Error " + resp.status);
+        setGalleryStatus("¡Conexión OK! Token y repo correctos.", "ok");
       } catch (e) {
-        setGalleryStatus("Error: " + e.message, "error");
+        setGalleryStatus("Error de red: " + e.message, "error");
       }
     });
   }
